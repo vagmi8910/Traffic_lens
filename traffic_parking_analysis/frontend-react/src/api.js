@@ -29,17 +29,17 @@ export const getJobStatus = jobId => API.get(`/job-status/${jobId}`);
 
 // ── Results ───────────────────────────────────────────────────────────────
 
-export const getTrafficMetrics    = jobId => API.get('/traffic-metrics',    { params: { job_id: jobId } });
-export const getCongestionLevel   = jobId => API.get('/congestion-level',   { params: { job_id: jobId } });
-export const getLaneBlockage      = jobId => API.get('/lane-blockage',      { params: { job_id: jobId } });
+export const getTrafficMetrics = jobId => API.get('/traffic-metrics', { params: { job_id: jobId } });
+export const getCongestionLevel = jobId => API.get('/congestion-level', { params: { job_id: jobId } });
+export const getLaneBlockage = jobId => API.get('/lane-blockage', { params: { job_id: jobId } });
 export const getParkingViolations = jobId => API.get('/parking-violations', { params: { job_id: jobId } });
-export const getTimeline          = jobId => API.get(`/timeline/${jobId}`);
+export const getTimeline = jobId => API.get(`/timeline/${jobId}`);
 
 // ── Heatmap ───────────────────────────────────────────────────────────────
 
-export const getTrafficDensityHeatmap  = jobId => API.get('/heatmap/traffic-density',  { params: { job_id: jobId } });
+export const getTrafficDensityHeatmap = jobId => API.get('/heatmap/traffic-density', { params: { job_id: jobId } });
 export const getParkingHotspotsHeatmap = jobId => API.get('/heatmap/parking-hotspots', { params: { job_id: jobId } });
-export const getVehicleTrajectories    = jobId => API.get('/analytics/vehicle-trajectories', { params: { job_id: jobId } });
+export const getVehicleTrajectories = jobId => API.get('/analytics/vehicle-trajectories', { params: { job_id: jobId } });
 
 // ── AI Explanations ───────────────────────────────────────────────────────
 
@@ -53,5 +53,6 @@ export const getVideoUrl = jobId => `http://localhost:8000/download-video/${jobI
 // ── Health ────────────────────────────────────────────────────────────────
 
 export const healthCheck = () => API.get('/health');
+export const listJobs = () => API.get('/jobs');
 
 export default API;

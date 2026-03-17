@@ -7,10 +7,11 @@ import TrafficGraphs from './components/TrafficGraphs';
 import HeatmapView from './components/HeatmapView';
 import CongestionIndicator from './components/CongestionIndicator';
 import ParkingAlerts from './components/ParkingAlerts';
+import JobHistory from './components/JobHistory';
 import {
   getJobStatus, getTrafficMetrics, getCongestionLevel,
   getLaneBlockage, getParkingViolations, getTimeline,
-  getTrafficDensityHeatmap, getParkingHotspotsHeatmap,
+
   healthCheck,
 } from './api';
 
@@ -54,6 +55,7 @@ export default function App() {
   const [jobStatus, setJobStatus] = useState(null);
   const [results, setResults] = useState(null);
   const [activeTab, setActiveTab] = useState('upload');
+  const [loadingHistory, setLoadingHistory] = useState(false);
 
   useEffect(() => {
     healthCheck().then(() => setBackendOk(true)).catch(() => setBackendOk(false));
@@ -61,14 +63,12 @@ export default function App() {
 
   const loadResults = useCallback(async id => {
     try {
-      const [metrics, cong, lanes, viol, tl, heatTraffic, heatParking] = await Promise.allSettled([
+      const [metrics, cong, lanes, viol, tl] = await Promise.allSettled([
         getTrafficMetrics(id),
         getCongestionLevel(id),
         getLaneBlockage(id),
         getParkingViolations(id),
         getTimeline(id),
-        getTrafficDensityHeatmap(id),
-        getParkingHotspotsHeatmap(id),
       ]);
       setResults({
         metrics: metrics.value?.data,
@@ -76,14 +76,13 @@ export default function App() {
         laneBlockage: lanes.value?.data,
         violations: viol.value?.data,
         timeline: tl.value?.data?.timeline || [],
-        heatTraffic: heatTraffic.value?.data,
-        heatParking: heatParking.value?.data,
       });
     } catch (e) {
       console.error('Failed to load results', e);
     }
   }, []);
 
+  // Polling for active job
   useEffect(() => {
     if (!jobId || jobStatus === 'completed' || jobStatus === 'failed') return;
     const timer = setInterval(async () => {
@@ -98,10 +97,22 @@ export default function App() {
     return () => clearInterval(timer);
   }, [jobId, jobStatus, loadResults]);
 
+  // New video uploaded
   const handleJobStarted = id => {
     setJobId(id);
     setJobStatus('queued');
     setResults(null);
+    setActiveTab('dashboard');
+  };
+
+  // User picks a job from history
+  const handleSelectHistoryJob = async id => {
+    setLoadingHistory(true);
+    setJobId(id);
+    setJobStatus('completed');
+    setResults(null);
+    await loadResults(id);
+    setLoadingHistory(false);
     setActiveTab('dashboard');
   };
 
@@ -110,6 +121,7 @@ export default function App() {
 
   const tabs = [
     { id: 'upload', label: 'Upload' },
+    { id: 'history', label: 'History' },
     { id: 'dashboard', label: 'Dashboard', disabled: !isDone },
     { id: 'charts', label: 'Charts', disabled: !isDone },
     { id: 'heatmap', label: 'Heatmap', disabled: !isDone },
@@ -161,7 +173,7 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Upload ── */}
+        {/* Upload */}
         {activeTab === 'upload' && (
           <div>
             <div style={{ textAlign: 'center', marginBottom: 32 }}>
@@ -191,21 +203,41 @@ export default function App() {
           </div>
         )}
 
-        {/* ── Dashboard: processing ── */}
+        {/* History */}
+        {activeTab === 'history' && (
+          <div style={{ maxWidth: 760, margin: '0 auto' }}>
+            <div style={{ textAlign: 'center', marginBottom: 28 }}>
+              <h1 style={{ marginBottom: 8 }}>Job History</h1>
+              <p style={{ color: 'var(--text2)', fontSize: '0.85rem' }}>
+                Click any completed job to reload its full analysis — dashboard, charts, heatmaps and video.
+              </p>
+            </div>
+            <JobHistory currentJobId={jobId} onSelectJob={handleSelectHistoryJob} />
+          </div>
+        )}
+
+        {/* Loading overlay when switching history jobs */}
+        {loadingHistory && (
+          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 999, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+            <div className="card" style={{ textAlign: 'center', padding: '36px 52px' }}>
+              <div style={{ width: 48, height: 48, borderRadius: '50%', border: '3px solid var(--border)', borderTopColor: 'var(--accent)', margin: '0 auto 16px', animation: 'spin 1s linear infinite' }} />
+              <div style={{ fontFamily: 'var(--font-mono)', fontSize: '0.85rem', color: 'var(--text)' }}>Loading analysis...</div>
+              <style>{`@keyframes spin { to { transform: rotate(360deg); } }`}</style>
+            </div>
+          </div>
+        )}
+
+        {/* Dashboard: processing */}
         {activeTab === 'dashboard' && isProcessing && (
           <ProcessingOverlay jobId={jobId} status={jobStatus} />
         )}
 
-        {/* ── Dashboard: results — NO video here ── */}
+        {/* Dashboard: results */}
         {activeTab === 'dashboard' && isDone && results && (
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 285px', gap: 20, alignItems: 'start' }}>
-
-            {/* Left column */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <TrafficStats metrics={results.metrics} processing_time={results.metrics?.processing_time_s} />
               <ParkingAlerts violations={results.violations} />
-
-              {/* Lane blockage cards */}
               {results.laneBlockage?.lanes && Object.keys(results.laneBlockage.lanes).length > 0 && (
                 <div className="card fade-in">
                   <div className="section-label"><h3>Lane Blockage</h3></div>
@@ -226,7 +258,6 @@ export default function App() {
               )}
             </div>
 
-            {/* Right sidebar */}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
               <CongestionIndicator level={results.congestion?.congestion_level} description={results.congestion?.description} />
               <div className="card">
@@ -243,22 +274,29 @@ export default function App() {
                     <span style={{ color: 'var(--accent)', fontFamily: 'var(--font-mono)' }}>{value ?? '—'}</span>
                   </div>
                 ))}
+                <button
+                  onClick={() => setActiveTab('history')}
+                  className="btn btn-ghost"
+                  style={{ width: '100%', justifyContent: 'center', marginTop: 12, fontSize: '0.72rem' }}
+                >
+                  📂 Switch to another job
+                </button>
               </div>
             </div>
           </div>
         )}
 
-        {/* ── Charts ── */}
+        {/* Charts */}
         {activeTab === 'charts' && isDone && results && (
           <TrafficGraphs timeline={results.timeline} laneData={results.laneBlockage?.lanes} jobId={jobId} />
         )}
 
-        {/* ── Heatmap ── */}
+        {/* Heatmap */}
         {activeTab === 'heatmap' && isDone && results && (
-          <HeatmapView trafficData={results.heatTraffic} parkingData={results.heatParking} jobId={jobId} />
+          <HeatmapView jobId={jobId} />
         )}
 
-        {/* ── Video — watch + download only here ── */}
+        {/* Video */}
         {activeTab === 'video' && isDone && (
           <ProcessedVideoViewer jobId={jobId} />
         )}
